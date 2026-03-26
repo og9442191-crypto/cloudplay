@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>CloudPlay</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, sans-serif; background: #0a0a0a; color: #fff; height: 100vh; overflow: hidden; }
+
+  .screen { display: none; height: 100vh; flex-direction: column; }
+  .screen.active { display: flex; }
+
+  /* TELA DE CONFIGURAÇÃO */
+  #setup { align-items: center; justify-content: center; padding: 32px; gap: 16px; }
+  #setup h1 { font-size: 28px; font-weight: 600; }
+  #setup p { font-size: 14px; color: #666; text-align: center; line-height: 1.6; }
+  #setup input {
+    width: 100%; padding: 14px 16px; background: #141414;
+    border: 0.5px solid #2a2a2a; border-radius: 12px;
+    color: #fff; font-size: 15px; margin-top: 8px;
+  }
+  #setup input::placeholder { color: #444; }
+  .btn-primary {
+    width: 100%; padding: 15px; background: #1f3d1f;
+    border: none; border-radius: 12px; color: #4ade80;
+    font-size: 15px; font-weight: 500; cursor: pointer;
+    margin-top: 4px;
+  }
+
+  /* TELA PRINCIPAL */
+  #main { background: #0a0a0a; }
+  .topbar { display: flex; align-items: center; justify-content: space-between; padding: 16px 18px 10px; }
+  .app-title { font-size: 22px; font-weight: 600; }
+  .badge { font-size: 10px; background: #1a3a1a; color: #4ade80; padding: 3px 10px; border-radius: 20px; border: 0.5px solid #2d5a2d; }
+
+  .tabs { display: flex; gap: 6px; padding: 0 12px 12px; }
+  .tab { flex: 1; padding: 8px 0; text-align: center; font-size: 13px; border-radius: 10px; border: none; cursor: pointer; transition: background 0.15s; }
+  .tab.on { background: #1f3d1f; color: #4ade80; }
+  .tab.off { background: #141414; color: #555; }
+
+  .page { display: none; flex: 1; overflow-y: auto; padding: 0 12px; }
+  .page.show { display: block; }
+
+  /* BIBLIOTECA */
+  .game-card {
+    display: flex; align-items: center; gap: 12px;
+    background: #141414; border-radius: 14px;
+    padding: 13px 14px; margin-bottom: 8px;
+    border: 0.5px solid #1e1e1e;
+  }
+  .game-icon { width: 46px; height: 46px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 24px; flex-shrink: 0; }
+  .game-info { flex: 1; min-width: 0; }
+  .game-name { font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .game-size { font-size: 11px; color: #555; margin-top: 2px; }
+  .play-btn { width: 36px; height: 36px; border-radius: 50%; background: #1f3d1f; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; }
+  .play-arrow { width:0; height:0; border-top:7px solid transparent; border-bottom:7px solid transparent; border-left:12px solid #4ade80; margin-left:3px; }
+  .empty { text-align: center; color: #333; font-size: 14px; padding: 48px 0; }
+
+  /* IMPORTAR */
+  .drop-zone {
+    border: 1.5px dashed #222; border-radius: 16px;
+    padding: 36px 16px; text-align: center;
+    background: #111; cursor: pointer; margin-bottom: 12px;
+  }
+  .drop-zone:active { background: #111b11; border-color: #3a5a3a; }
+  .drop-emoji { font-size: 36px; margin-bottom: 10px; }
+  .drop-title { font-size: 15px; color: #ccc; font-weight: 500; margin-bottom: 4px; }
+  .drop-sub { font-size: 12px; color: #444; }
+  .browse-btn { margin-top: 14px; background: #1f3d1f; border: none; color: #4ade80; font-size: 13px; padding: 10px 24px; border-radius: 20px; cursor: pointer; }
+
+  .progress-box { background: #141414; border-radius: 12px; padding: 14px; margin-bottom: 12px; display: none; }
+  .prog-name { font-size: 12px; color: #ccc; margin-bottom: 8px; }
+  .prog-bg { background: #1a1a1a; border-radius: 4px; height: 4px; overflow: hidden; }
+  .prog-fill { height: 100%; background: #4ade80; border-radius: 4px; width: 0%; transition: width 0.3s; }
+  .prog-pct { font-size: 11px; color: #555; margin-top: 6px; }
+
+  .tip-card { background: #0f1a0f; border: 0.5px solid #1e3a1e; border-radius: 12px; padding: 14px 16px; }
+  .tip-row { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 8px; }
+  .tip-row:last-child { margin-bottom: 0; }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: #4ade80; margin-top: 5px; flex-shrink: 0; }
+  .tip-text { font-size: 12px; color: #555; line-height: 1.5; }
+  .tip-text b { color: #4ade80; font-weight: 500; }
+
+  /* TELA DE JOGO */
+  #playing { background: #000; position: relative; }
+  #game-video { width: 100%; height: 100%; object-fit: contain; }
+  .game-controls { position: absolute; bottom: 20px; left: 0; right: 0; display: flex; justify-content: center; gap: 12px; }
+  .ctrl-btn { width: 52px; height: 52px; border-radius: 50%; background: rgba(255,255,255,0.1); border: 0.5px solid rgba(255,255,255,0.15); color: #fff; font-size: 20px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+  .stop-btn { position: absolute; top: 16px; right: 16px; background: rgba(200,0,0,0.4); border: none; color: #fff; font-size: 12px; padding: 6px 14px; border-radius: 20px; cursor: pointer; }
+
+  .statusbar { display: flex; align-items: center; justify-content: space-between; padding: 10px 18px; border-top: 0.5px solid #1a1a1a; }
+  .status-txt { font-size: 10px; color: #555; }
+  .sdot { width: 7px; height: 7px; border-radius: 50%; background: #4ade80; display: inline-block; margin-right: 5px; }
+</style>
+</head>
+<body>
+
+<!-- TELA 1: Configuração inicial -->
+<div class="screen active" id="setup">
+  <h1>☁️ CloudPlay</h1>
+  <p>Digite o IP do seu servidor na nuvem para começar</p>
+  <div style="width:100%">
+    <input type="text" id="server-ip" placeholder="Ex: 192.168.1.100:3000" />
+    <button class="btn-primary" onclick="saveServer()">Conectar</button>
+  </div>
+  <p style="font-size:11px; color:#333; margin-top: 8px;">Não tem servidor? Veja o guia em github.com/seu-usuario/cloudplay</p>
+</div>
+
+<!-- TELA 2: Principal -->
+<div class="screen" id="main">
+  <div class="topbar">
+    <span class="app-title">CloudPlay</span>
+    <span class="badge" id="conn-badge">Conectando...</span>
+  </div>
+
+  <div class="tabs">
+    <button class="tab on" id="t-lib" onclick="showTab('lib')">Biblioteca</button>
+    <button class="tab off" id="t-imp" onclick="showTab('imp')">+ Importar</button>
+  </div>
+
+  <!-- Biblioteca -->
+  <div class="page show" id="page-lib">
+    <div id="games-container">
+      <div class="empty">Nenhum jogo ainda.<br>Vá em Importar para adicionar.</div>
+    </div>
+  </div>
+
+  <!-- Importar -->
+  <div class="page" id="page-imp">
+    <div class="drop-zone" onclick="pickGame()">
+      <div class="drop-emoji">📂</div>
+      <div class="drop-title">Selecionar jogo do celular</div>
+      <div class="drop-sub">Suporta .exe · .iso · .zip</div>
+      <button class="browse-btn">Procurar arquivo</button>
+    </div>
+
+    <div class="progress-box" id="prog-box">
+      <div class="prog-name" id="prog-name">Enviando...</div>
+      <div class="prog-bg"><div class="prog-fill" id="prog-fill"></div></div>
+      <div class="prog-pct" id="prog-pct">0%</div>
+    </div>
+
+    <div class="tip-card">
+      <div class="tip-row"><div class="dot"></div><div class="tip-text"><b>Você armazena</b> o jogo no celular normalmente</div></div>
+      <div class="tip-row"><div class="dot"></div><div class="tip-text"><b>A nuvem processa</b> gráficos, física e IA do jogo</div></div>
+      <div class="tip-row"><div class="dot"></div><div class="tip-text"><b>Seu celular recebe</b> o vídeo e envia os controles</div></div>
+      <div class="tip-row"><div class="dot"></div><div class="tip-text"><b>Resultado:</b> celular usa ~50% menos processamento</div></div>
+    </div>
+  </div>
+
+  <div class="statusbar">
+    <span class="status-txt"><span class="sdot"></span><span id="status-msg">Verificando servidor...</span></span>
+    <span style="font-size:10px;color:#333;" onclick="logout()">Trocar servidor</span>
+  </div>
+</div>
+
+<!-- TELA 3: Jogando -->
+<div class="screen" id="playing">
+  <video id="game-video" autoplay playsinline muted></video>
+  <button class="stop-btn" onclick="stopGame()">Parar</button>
+  <div class="game-controls">
+    <div class="ctrl-btn" ontouchstart="sendKey('Left')" onclick="sendKey('Left')">◀</div>
+    <div class="ctrl-btn" ontouchstart="sendKey('Up')" onclick="sendKey('Up')">▲</div>
+    <div class="ctrl-btn" ontouchstart="sendKey('Down')" onclick="sendKey('Down')">▼</div>
+    <div class="ctrl-btn" ontouchstart="sendKey('Right')" onclick="sendKey('Right')">▶</div>
+    <div class="ctrl-btn" ontouchstart="sendKey('Return')" onclick="sendKey('Return')">✓</div>
+  </div>
+</div>
+
+<script>
+var SERVER = '';
+var games = [];
+var mediaSource, sourceBuffer;
+
+function show(id) {
+  document.querySelectorAll('.screen').forEach(function(s){ s.classList.remove('active'); });
+  document.getElementById(id).classList.add('active');
+}
+
+function saveServer() {
+  var ip = document.getElementById('server-ip').value.trim();
+  if (!ip) return alert('Digite o IP do servidor');
+  if (!ip.startsWith('http')) ip = 'http://' + ip;
+  SERVER = ip;
+  if (window.Android) window.Android.saveServerUrl(ip);
+  checkConnection();
+}
+
+function checkConnection() {
+  fetch(SERVER + '/games')
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      games = data;
+      renderGames();
+      document.getElementById('conn-badge').textContent = 'Conectado';
+      document.getElementById('conn-badge').style.background = '#1a3a1a';
+      document.getElementById('status-msg').textContent = 'Servidor conectado';
+      show('main');
+    })
+    .catch(function(){
+      alert('Não foi possível conectar. Verifique o IP e tente novamente.');
+    });
+}
+
+function renderGames() {
+  var c = document.getElementById('games-container');
+  if (!games.length) {
+    c.innerHTML = '<div class="empty">Nenhum jogo ainda.<br>Vá em Importar para adicionar.</div>';
+    return;
+  }
+  c.innerHTML = games.map(function(g){
+    var mb = (g.size / 1024 / 1024).toFixed(0);
+    return '<div class="game-card">' +
+      '<div class="game-icon" style="background:#1a1f2e;">🎮</div>' +
+      '<div class="game-info">' +
+        '<div class="game-name">' + g.name + '</div>' +
+        '<div class="game-size">' + mb + ' MB · Pronto para jogar</div>' +
+      '</div>' +
+      '<div class="play-btn" onclick="launchGame(\'' + g.name + '\')">' +
+        '<div class="play-arrow"></div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function showTab(t) {
+  document.getElementById('page-lib').classList.toggle('show', t==='lib');
+  document.getElementById('page-imp').classList.toggle('show', t==='imp');
+  document.getElementById('t-lib').className = 'tab ' + (t==='lib'?'on':'off');
+  document.getElementById('t-imp').className = 'tab ' + (t==='imp'?'on':'off');
+}
+
+function pickGame() {
+  // Usa input file para selecionar do celular
+  var input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.exe,.iso,.zip';
+  input.onchange = function(e){
+    var file = e.target.files[0];
+    if (!file) return;
+    uploadGame(file);
+  };
+  input.click();
+}
+
+function uploadGame(file) {
+  var box = document.getElementById('prog-box');
+  var fill = document.getElementById('prog-fill');
+  var pct = document.getElementById('prog-pct');
+  var name = document.getElementById('prog-name');
+  box.style.display = 'block';
+  name.textContent = file.name + ' · ' + (file.size/1024/1024).toFixed(0) + ' MB';
+
+  var fd = new FormData();
+  fd.append('game', file);
+
+  var xhr = new XMLHttpRequest();
+  xhr.open('POST', SERVER + '/upload');
+
+  xhr.upload.onprogress = function(e){
+    if (e.lengthComputable) {
+      var p = Math.round(e.loaded / e.total * 100);
+      fill.style.width = p + '%';
+      pct.textContent = p + '%';
+    }
+  };
+
+  xhr.onload = function(){
+    if (xhr.status === 200) {
+      pct.textContent = 'Concluído!';
+      checkConnection();
+      setTimeout(function(){ box.style.display='none'; fill.style.width='0%'; showTab('lib'); }, 1500);
+    } else {
+      alert('Erro no upload. Tente novamente.');
+      box.style.display = 'none';
+    }
+  };
+
+  xhr.send(fd);
+}
+
+function launchGame(filename) {
+  fetch(SERVER + '/launch', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ filename: filename })
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(){
+    show('playing');
+    // Em produção: conectar via WebSocket e receber chunks de vídeo
+    // Por ora mostra a tela de jogo
+  })
+  .catch(function(){ alert('Erro ao iniciar o jogo.'); });
+}
+
+function stopGame() {
+  fetch(SERVER + '/stop', { method: 'POST' });
+  show('main');
+}
+
+function sendKey(key) {
+  fetch(SERVER + '/input', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type: 'key', key: key })
+  });
+}
+
+function logout() {
+  SERVER = '';
+  show('setup');
+}
+
+// Ao abrir, verifica se já tem servidor salvo
+window.onload = function() {
+  var saved = window.Android ? window.Android.getServerUrl() : '';
+  if (saved) {
+    SERVER = saved;
+    document.getElementById('server-ip').value = saved;
+    checkConnection();
+  }
+};
+</script>
+</body>
+                                             </html>
+  
