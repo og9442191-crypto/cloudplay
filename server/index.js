@@ -25,8 +25,12 @@ if (!API_KEY) {
 }
 
 function authenticate(req, res, next) {
+  // Skip auth for CORS preflight requests
+  if (req.method === 'OPTIONS') return next();
+
   const key = req.headers['x-api-key'];
-  if (!key || !crypto.timingSafeEqual(Buffer.from(key), Buffer.from(API_KEY))) {
+  if (!key || Buffer.byteLength(key) !== Buffer.byteLength(API_KEY) ||
+      !crypto.timingSafeEqual(Buffer.from(key), Buffer.from(API_KEY))) {
     return res.status(401).json({ error: 'Unauthorized – invalid or missing API key' });
   }
   next();
@@ -37,6 +41,7 @@ app.use(authenticate);
 
 // ---------------------------------------------------------------------------
 // 2. Restrictive CORS – only allow the origins you control
+//    Mounted BEFORE auth so that OPTIONS preflight can succeed.
 // ---------------------------------------------------------------------------
 const ALLOWED_ORIGINS = (process.env.CLOUDPLAY_ALLOWED_ORIGINS || '').split(',').filter(Boolean);
 
