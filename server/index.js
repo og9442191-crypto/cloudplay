@@ -41,7 +41,7 @@ app.use(authenticate);
 
 // ---------------------------------------------------------------------------
 // 2. Restrictive CORS – only allow the origins you control
-//    Mounted BEFORE auth so that OPTIONS preflight can succeed.
+//    OPTIONS preflight succeeds because authenticate() skips OPTIONS requests.
 // ---------------------------------------------------------------------------
 const ALLOWED_ORIGINS = (process.env.CLOUDPLAY_ALLOWED_ORIGINS || '').split(',').filter(Boolean);
 
