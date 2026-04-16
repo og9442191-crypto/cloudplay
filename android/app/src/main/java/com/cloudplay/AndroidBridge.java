@@ -51,5 +51,19 @@ public class AndroidBridge {
         context.getSharedPreferences("cloudplay", Context.MODE_PRIVATE)
             .edit().putString("server_url", url).apply();
     }
+
+    // Retorna a chave de API salva
+    @JavascriptInterface
+    public String getApiKey() {
+        return context.getSharedPreferences("cloudplay", Context.MODE_PRIVATE)
+            .getString("api_key", "");
+    }
+
+    // Salva a chave de API
+    @JavascriptInterface
+    public void saveApiKey(String key) {
+        context.getSharedPreferences("cloudplay", Context.MODE_PRIVATE)
+            .edit().putString("api_key", key).apply();
+    }
 }
 

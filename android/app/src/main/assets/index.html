@@ -102,6 +102,7 @@
   <p>Digite o IP do seu servidor na nuvem para começar</p>
   <div style="width:100%">
     <input type="text" id="server-ip" placeholder="Ex: 192.168.1.100:3000" />
+    <input type="password" id="api-key" placeholder="Chave de API do servidor" style="margin-top:8px" />
     <button class="btn-primary" onclick="saveServer()">Conectar</button>
   </div>
   <p style="font-size:11px; color:#333; margin-top: 8px;">Não tem servidor? Veja o guia em github.com/seu-usuario/cloudplay</p>
@@ -170,8 +171,16 @@
 
 <script>
 var SERVER = '';
+var API_KEY = '';
 var games = [];
 var mediaSource, sourceBuffer;
+
+// HTML-escape to prevent XSS from malicious filenames
+function esc(str) {
+  var el = document.createElement('span');
+  el.textContent = str;
+  return el.innerHTML;
+}
 
 function show(id) {
   document.querySelectorAll('.screen').forEach(function(s){ s.classList.remove('active'); });
@@ -181,14 +190,24 @@ function show(id) {
 function saveServer() {
   var ip = document.getElementById('server-ip').value.trim();
   if (!ip) return alert('Digite o IP do servidor');
-  if (!ip.startsWith('http')) ip = 'http://' + ip;
+  if (!ip.startsWith('http')) ip = 'https://' + ip;
   SERVER = ip;
-  if (window.Android) window.Android.saveServerUrl(ip);
+  API_KEY = document.getElementById('api-key') ? document.getElementById('api-key').value.trim() : '';
+  if (window.Android) {
+    window.Android.saveServerUrl(ip);
+    window.Android.saveApiKey(API_KEY);
+  }
   checkConnection();
 }
 
+function authHeaders(extra) {
+  var h = { 'x-api-key': API_KEY };
+  if (extra) { for (var k in extra) h[k] = extra[k]; }
+  return h;
+}
+
 function checkConnection() {
-  fetch(SERVER + '/games')
+  fetch(SERVER + '/games', { headers: authHeaders() })
     .then(function(r){ return r.json(); })
     .then(function(data){
       games = data;
@@ -211,17 +230,24 @@ function renderGames() {
   }
   c.innerHTML = games.map(function(g){
     var mb = (g.size / 1024 / 1024).toFixed(0);
+    var safeName = esc(g.name);
     return '<div class="game-card">' +
       '<div class="game-icon" style="background:#1a1f2e;">🎮</div>' +
       '<div class="game-info">' +
-        '<div class="game-name">' + g.name + '</div>' +
+        '<div class="game-name">' + safeName + '</div>' +
         '<div class="game-size">' + mb + ' MB · Pronto para jogar</div>' +
       '</div>' +
-      '<div class="play-btn" onclick="launchGame(\'' + g.name + '\')">' +
+      '<div class="play-btn" data-game="' + safeName + '">' +
         '<div class="play-arrow"></div>' +
       '</div>' +
     '</div>';
   }).join('');
+  // Event delegation for play buttons – avoids inline onclick injection
+  c.querySelectorAll('.play-btn[data-game]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      launchGame(btn.getAttribute('data-game'));
+    });
+  });
 }
 
 function showTab(t) {
@@ -252,11 +278,20 @@ function uploadGame(file) {
   box.style.display = 'block';
   name.textContent = file.name + ' · ' + (file.size/1024/1024).toFixed(0) + ' MB';
 
+  // Client-side size limit (2 GB)
+  var MAX_SIZE = 2 * 1024 * 1024 * 1024;
+  if (file.size > MAX_SIZE) {
+    alert('Arquivo muito grande. Máximo: 2 GB');
+    box.style.display = 'none';
+    return;
+  }
+
   var fd = new FormData();
   fd.append('game', file);
 
   var xhr = new XMLHttpRequest();
   xhr.open('POST', SERVER + '/upload');
+  xhr.setRequestHeader('x-api-key', API_KEY);
 
   xhr.upload.onprogress = function(e){
     if (e.lengthComputable) {
@@ -283,7 +318,7 @@ function uploadGame(file) {
 function launchGame(filename) {
   fetch(SERVER + '/launch', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ filename: filename })
   })
   .then(function(r){ return r.json(); })
@@ -296,14 +331,14 @@ function launchGame(filename) {
 }
 
 function stopGame() {
-  fetch(SERVER + '/stop', { method: 'POST' });
+  fetch(SERVER + '/stop', { method: 'POST', headers: authHeaders() });
   show('main');
 }
 
 function sendKey(key) {
   fetch(SERVER + '/input', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ type: 'key', key: key })
   });
 }
@@ -316,9 +351,12 @@ function logout() {
 // Ao abrir, verifica se já tem servidor salvo
 window.onload = function() {
   var saved = window.Android ? window.Android.getServerUrl() : '';
+  var savedKey = window.Android ? window.Android.getApiKey() : '';
   if (saved) {
     SERVER = saved;
+    API_KEY = savedKey || '';
     document.getElementById('server-ip').value = saved;
+    if (document.getElementById('api-key')) document.getElementById('api-key').value = API_KEY;
     checkConnection();
   }
 };
